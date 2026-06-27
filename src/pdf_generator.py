@@ -53,7 +53,7 @@ CLEANUP_JS = """
     // 2. Remove structural nav/header/footer
     document.querySelectorAll('header, footer, nav').forEach(el => el.remove());
 
-    // 3. Remove video/media blocks
+    // 3. Remove video/media blocks (hide so no blank space)
     document.querySelectorAll('[data-component="media-block"]').forEach(el => {
         let target = el;
         while (target.parentElement && !target.parentElement.hasAttribute('data-component')) {
