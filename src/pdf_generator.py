@@ -7,47 +7,95 @@ from playwright.sync_api import sync_playwright
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-# Minimal CSS: let BBC's own print CSS handle layout.
-# We only remove things BBC's print CSS misses.
 MINIMAL_CSS = """
-/* Ads BBC print CSS doesn't hide */
-[id*="taboola"], [class*="taboola"],
-[data-component="advertisement-block"],
-[class*="Backdrop"], [class*="Drawer"],
-[data-testid="backdrop"], [data-testid="drawer-background"],
-[data-testid="notification-banner"],
-[class*="CookieBanner"], [class*="cookie-banner"],
-[id*="sp_message"], [class*="sp_message"] {
-    display: none !important;
-}
-
-/* Video/media hero: hide the player box but keep the figure space minimal */
-[data-component="media-block"] {
-    display: none !important;
-}
-
-/* Source URL watermark at top */
 body::before {
     content: attr(data-source-url);
     font-family: Arial, sans-serif;
     font-size: 10px;
     color: #888;
     display: block;
-    padding: 3px 0 6px;
+    padding: 3px 0 8px;
     border-bottom: 1px solid #ddd;
     margin-bottom: 10px;
 }
-
 @page { size: A4; margin: 1.5cm 2cm; }
+img { max-width: 100% !important; height: auto !important; }
+
+/* Force full-width for all article content blocks */
+@media print {
+    article > div, article > div > div,
+    [data-component] [class*="LayoutBlock"],
+    [data-component] [class*="GridStyled"],
+    [data-component] [class*="GridItem"] {
+        max-width: 100% !important;
+        width: 100% !important;
+    }
+}
 """
 
-# Domains to block at network level
 BLOCKED_DOMAINS = [
     "trc.taboola.com", "cdn.taboola.com", "lb.taboola.com",
     "doubleclick.net", "googlesyndication.com", "googletagmanager.com",
     "chartbeat.com", "scorecardresearch.com", "omtrdc.net",
-    "adobedtm.com", "adsystem.com", "amazon-adsystem.com",
+    "adobedtm.com", "amazon-adsystem.com",
 ]
+
+CLEANUP_JS = """
+() => {
+    // 1. Remove fixed/sticky (banners, nav, cookie popups)
+    document.querySelectorAll('*').forEach(el => {
+        try {
+            const s = window.getComputedStyle(el);
+            if (s.position === 'fixed' || s.position === 'sticky') el.remove();
+        } catch(e) {}
+    });
+
+    // 2. Remove structural nav/header/footer
+    document.querySelectorAll('header, footer, nav').forEach(el => el.remove());
+
+    // 3. Remove video/media blocks
+    document.querySelectorAll('[data-component="media-block"]').forEach(el => {
+        let target = el;
+        while (target.parentElement && !target.parentElement.hasAttribute('data-component')) {
+            target = target.parentElement;
+        }
+        target.style.display = 'none';
+    });
+
+    // 4. Remove ads, Taboola, social share bars, related stories
+    const selectors = [
+        '[data-component="ad-slot"]',
+        '[data-component="advertisement-block"]',
+        '[data-component="tag-list-block"]',
+        '[id*="taboola"]', '[class*="taboola"]',
+        '[data-testid="share-tools"]',
+        '[data-testid="inline-share-tools"]',
+        '[data-testid="google_preferred"]',
+        'button[aria-label*="Share"]',
+        'button[aria-label*="Save"]',
+        '[data-testid^="ohio-section-outer"]',
+    ];
+    document.querySelectorAll(selectors.join(',')).forEach(el => el.remove());
+
+    // 5. Force full-width on layout/text blocks (BBC print CSS constrains these)
+    document.querySelectorAll(
+        '[data-component="layout-block"], [data-component="text-block"]'
+    ).forEach(el => {
+        el.style.setProperty('max-width', 'none', 'important');
+        el.style.setProperty('width', '100%', 'important');
+    });
+    document.querySelectorAll(
+        '[data-component="layout-block"] [class*="Grid"],' +
+        '[data-component="layout-block"] [class*="GridItem"],' +
+        '[data-component="text-block"] [class*="Grid"],' +
+        '[data-component="text-block"] [class*="GridItem"]'
+    ).forEach(el => {
+        el.style.setProperty('max-width', 'none', 'important');
+        el.style.setProperty('width', '100%', 'important');
+        el.style.setProperty('display', 'block', 'important');
+    });
+}
+"""
 
 
 def _sanitize_filename(title: str, date_str: str) -> str:
@@ -71,12 +119,11 @@ def generate_pdf(article: dict, output_dir: Path, date_str: str) -> Path:
             args=["--no-sandbox", "--disable-setuid-sandbox"],
         )
         context = browser.new_context(
-            viewport={"width": 1280, "height": 900},
+            viewport={"width": 1440, "height": 900},
             locale="en-US",
         )
         page = context.new_page()
 
-        # Block ads/trackers at network level (especially Taboola)
         def route_handler(route):
             if any(d in route.request.url for d in BLOCKED_DOMAINS):
                 route.abort()
@@ -84,26 +131,13 @@ def generate_pdf(article: dict, output_dir: Path, date_str: str) -> Path:
                 route.continue_()
 
         page.route("**/*", route_handler)
-
-        # Use domcontentloaded to avoid waiting for slow ad networks
         page.goto(article["url"], wait_until="domcontentloaded", timeout=45000)
-        page.wait_for_timeout(3000)  # let images load, but ads are already blocked
+        page.wait_for_timeout(3000)
 
-        # Remove remaining fixed/sticky elements (banners, cookie popups)
-        page.evaluate("""
-            document.querySelectorAll('*').forEach(el => {
-                try {
-                    const s = window.getComputedStyle(el);
-                    if (s.position === 'fixed' || s.position === 'sticky') el.remove();
-                } catch(e) {}
-            });
-        """)
+        page.evaluate(CLEANUP_JS)
 
-        # Tag source URL
         url_escaped = article["url"].replace("'", "\\'")
         page.evaluate(f"document.body.setAttribute('data-source-url', '{url_escaped}');")
-
-        # Inject minimal CSS (BBC's own print CSS handles the rest)
         page.add_style_tag(content=MINIMAL_CSS)
         page.wait_for_timeout(400)
 
