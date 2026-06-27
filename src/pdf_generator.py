@@ -8,7 +8,6 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 BBC_PRINT_CSS = """
-/* ===== 隱藏雜訊元素 ===== */
 header, footer, nav,
 [data-testid="navigation"],
 [data-testid="secondary-navigation"],
@@ -25,6 +24,13 @@ header, footer, nav,
 [data-testid="user-notification"],
 [class*="social-embed"],
 [data-testid="topic-list"],
+[data-testid="notification-banner"],
+[class*="Banner"],
+[class*="banner"],
+[class*="Cookie"],
+[class*="cookie"],
+[id*="cookie"],
+[id*="Cookie"],
 .bbccom_slot,
 .bbccom_display_none,
 script, style, noscript,
@@ -48,26 +54,28 @@ body {
 [data-testid="article-figure"],
 article,
 main {
-    max-width: 640px !important;
-    margin: 0 auto !important;
-    padding: 0 24px !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 12px !important;
+    box-sizing: border-box !important;
 }
 
 h1 {
     font-family: "BBC Reith Serif", Georgia, serif !important;
-    font-size: 32px !important;
+    font-size: 28px !important;
     font-weight: 700 !important;
     line-height: 1.2 !important;
     color: #111 !important;
-    margin: 24px 0 8px !important;
+    margin: 20px 0 8px !important;
 }
 
 [data-testid="hero-headline-and-description"] p,
 [data-component="description"] {
-    font-size: 20px !important;
+    font-size: 19px !important;
     font-weight: 400 !important;
     color: #444 !important;
-    margin: 0 0 16px !important;
+    margin: 0 0 14px !important;
 }
 
 [data-testid="byline-new-contributors"],
@@ -76,7 +84,7 @@ time {
     font-size: 13px !important;
     color: #555 !important;
     display: block !important;
-    margin: 4px 0 20px !important;
+    margin: 4px 0 18px !important;
 }
 
 body::before {
@@ -85,15 +93,15 @@ body::before {
     font-family: Arial, sans-serif;
     font-size: 11px;
     color: #666;
-    padding: 8px 24px;
+    padding: 6px 12px;
     border-bottom: 1px solid #ddd;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
 }
 
 p {
     font-size: 18px !important;
     line-height: 1.7 !important;
-    margin: 0 0 20px !important;
+    margin: 0 0 18px !important;
     color: #222 !important;
 }
 
@@ -101,7 +109,7 @@ img {
     max-width: 100% !important;
     height: auto !important;
     display: block !important;
-    margin: 16px auto !important;
+    margin: 14px auto !important;
 }
 
 figcaption,
@@ -109,13 +117,13 @@ figcaption,
     font-size: 13px !important;
     color: #555 !important;
     text-align: center !important;
-    margin: 4px 0 20px !important;
+    margin: 4px 0 18px !important;
     font-style: italic !important;
 }
 
 blockquote {
     border-left: 4px solid #bb1919 !important;
-    margin: 20px 0 !important;
+    margin: 18px 0 !important;
     padding: 8px 16px !important;
     font-style: italic !important;
     color: #333 !important;
@@ -124,7 +132,7 @@ blockquote {
 hr {
     border: none !important;
     border-top: 1px solid #ddd !important;
-    margin: 24px 0 !important;
+    margin: 20px 0 !important;
 }
 
 @page {
@@ -160,22 +168,31 @@ def generate_pdf(article: dict, output_dir: Path, date_str: str) -> Path:
         )
         page = context.new_page()
 
-        page.route(
-            "**/*.{png,jpg,jpeg,gif,svg,webp}",
-            lambda route: route.continue_() if "ichef.bbci.co.uk" in route.request.url else route.abort()
-        )
-        page.route("**/ads/**", lambda route: route.abort())
-        page.route("**/analytics/**", lambda route: route.abort())
+        # Block only trackers/ads; allow all images (BBC images have no extension in URL)
+        def route_handler(route):
+            url = route.request.url
+            if any(x in url for x in ["doubleclick.net", "googlesyndication", "chartbeat", "scorecardresearch", "/ads/", "/analytics/"]):
+                route.abort()
+            else:
+                route.continue_()
 
-        page.goto(article["url"], wait_until="domcontentloaded", timeout=30000)
-        page.wait_for_timeout(2000)
+        page.route("**/*", route_handler)
 
-        page.evaluate(f"""
-            document.body.setAttribute('data-source-url', '{article["url"]}');
+        page.goto(article["url"], wait_until="networkidle", timeout=45000)
+
+        # Remove fixed/sticky elements (cookie banners, notification bars)
+        page.evaluate("""
+            document.querySelectorAll('*').forEach(el => {
+                const s = window.getComputedStyle(el);
+                if (s.position === 'fixed' || s.position === 'sticky') {
+                    el.remove();
+                }
+            });
         """)
 
+        page.evaluate(f"document.body.setAttribute('data-source-url', '{article['url']}');")
         page.add_style_tag(content=BBC_PRINT_CSS)
-        page.wait_for_timeout(500)
+        page.wait_for_timeout(800)
 
         page.pdf(
             path=str(output_path),
