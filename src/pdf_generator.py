@@ -7,129 +7,47 @@ from playwright.sync_api import sync_playwright
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-BBC_PRINT_CSS = """
-header, footer, nav,
-[data-testid="navigation"],
-[data-testid="secondary-navigation"],
-[data-testid="related-stories"],
-[data-testid="advertisement"],
-[data-testid="tout"],
-[data-component="ad-slot"],
+# Minimal CSS: let BBC's own print CSS handle layout.
+# We only remove things BBC's print CSS misses.
+MINIMAL_CSS = """
+/* Ads BBC print CSS doesn't hide */
+[id*="taboola"], [class*="taboola"],
 [data-component="advertisement-block"],
-[data-component="media-block"],
-[class*="Ad-"], [class*="ad-"], [id*="ad-"],
-[class*="promo"], [class*="Promo"],
-[data-testid="cookies-banner"],
-[data-testid="user-notification"],
+[class*="Backdrop"], [class*="Drawer"],
+[data-testid="backdrop"], [data-testid="drawer-background"],
 [data-testid="notification-banner"],
-[class*="social-embed"],
-[data-testid="topic-list"],
-[class*="Backdrop"], [data-testid="backdrop"],
-[class*="Drawer"], [data-testid="drawer-background"],
-.bbccom_slot, .bbccom_display_none,
-script, style, noscript,
-[data-testid="timestamp"],
-[data-testid="byline-new-contributors"],
-aside {
+[class*="CookieBanner"], [class*="cookie-banner"],
+[id*="sp_message"], [class*="sp_message"] {
     display: none !important;
 }
 
-body {
-    font-family: "BBC Reith Serif", Georgia, "Times New Roman", serif !important;
-    font-size: 18px !important;
-    line-height: 1.7 !important;
-    color: #222 !important;
-    background: #fff !important;
-    margin: 0 !important;
-    padding: 0 !important;
+/* Video/media hero: hide the player box but keep the figure space minimal */
+[data-component="media-block"] {
+    display: none !important;
 }
 
+/* Source URL watermark at top */
 body::before {
     content: attr(data-source-url);
-    display: block;
     font-family: Arial, sans-serif;
-    font-size: 11px;
-    color: #666;
-    padding: 6px 0;
+    font-size: 10px;
+    color: #888;
+    display: block;
+    padding: 3px 0 6px;
     border-bottom: 1px solid #ddd;
-    margin-bottom: 16px;
+    margin-bottom: 10px;
 }
 
-h1 {
-    font-size: 32px !important;
-    font-weight: 700 !important;
-    line-height: 1.2 !important;
-    color: #111 !important;
-    margin: 16px 0 10px !important;
-}
-
-p {
-    font-size: 18px !important;
-    line-height: 1.75 !important;
-    margin: 0 0 20px !important;
-    color: #222 !important;
-}
-
-img {
-    max-width: 100% !important;
-    height: auto !important;
-    display: block !important;
-    margin: 16px 0 !important;
-}
-
-figcaption, [data-testid="image-caption"] {
-    font-size: 13px !important;
-    color: #555 !important;
-    margin: 4px 0 20px !important;
-    font-style: italic !important;
-}
-
-blockquote {
-    border-left: 4px solid #bb1919 !important;
-    margin: 20px 0 !important;
-    padding: 8px 16px !important;
-    font-style: italic !important;
-    color: #333 !important;
-}
-
-hr { border: none !important; border-top: 1px solid #ddd !important; margin: 24px 0 !important; }
-
-@page { margin: 1.5cm 2cm; size: A4; }
+@page { size: A4; margin: 1.5cm 2cm; }
 """
 
-CLEANUP_JS = """
-() => {
-    // Remove fixed/sticky elements (banners, headers, cookie notices)
-    document.querySelectorAll('*').forEach(el => {
-        try {
-            const s = window.getComputedStyle(el);
-            if (s.position === 'fixed' || s.position === 'sticky') el.remove();
-        } catch(e) {}
-    });
-
-    // Remove video/media blocks only (keep image-block)
-    document.querySelectorAll('[data-component="media-block"]').forEach(el => el.remove());
-
-    // Fix BBC grid: make content column full width, remove sidebar
-    const gridItems = [...document.querySelectorAll('[class*="GridItem"]')];
-    gridItems.forEach((el, i) => {
-        if (i === 0) {
-            el.style.cssText += 'width:100%!important;max-width:none!important;';
-        } else {
-            el.remove();
-        }
-    });
-    document.querySelectorAll('[class*="GridStyled"],[class*="Grid-styles"]').forEach(el => {
-        el.style.cssText += 'display:block!important;width:100%!important;max-width:none!important;';
-    });
-
-    // Remove remaining width constraints on wrappers
-    document.querySelectorAll('[class*="LayoutBlock"],[class*="Container"],[class*="Wrapper"],[class*="PageInner"]').forEach(el => {
-        el.style.maxWidth = 'none';
-        el.style.width = '100%';
-    });
-}
-"""
+# Domains to block at network level
+BLOCKED_DOMAINS = [
+    "trc.taboola.com", "cdn.taboola.com", "lb.taboola.com",
+    "doubleclick.net", "googlesyndication.com", "googletagmanager.com",
+    "chartbeat.com", "scorecardresearch.com", "omtrdc.net",
+    "adobedtm.com", "adsystem.com", "amazon-adsystem.com",
+]
 
 
 def _sanitize_filename(title: str, date_str: str) -> str:
@@ -158,40 +76,36 @@ def generate_pdf(article: dict, output_dir: Path, date_str: str) -> Path:
         )
         page = context.new_page()
 
+        # Block ads/trackers at network level (especially Taboola)
         def route_handler(route):
-            url = route.request.url
-            if any(x in url for x in [
-                "doubleclick.net", "googlesyndication", "chartbeat",
-                "scorecardresearch", "omtrdc.net", "adobedtm.com",
-            ]):
+            if any(d in route.request.url for d in BLOCKED_DOMAINS):
                 route.abort()
             else:
                 route.continue_()
 
         page.route("**/*", route_handler)
-        page.goto(article["url"], wait_until="networkidle", timeout=45000)
 
-        # Scroll to trigger lazy-loaded images
+        # Use domcontentloaded to avoid waiting for slow ad networks
+        page.goto(article["url"], wait_until="domcontentloaded", timeout=45000)
+        page.wait_for_timeout(3000)  # let images load, but ads are already blocked
+
+        # Remove remaining fixed/sticky elements (banners, cookie popups)
         page.evaluate("""
-            new Promise(resolve => {
-                let pos = 0;
-                const h = document.body.scrollHeight;
-                const timer = setInterval(() => {
-                    pos += 600;
-                    window.scrollTo(0, pos);
-                    if (pos >= h) { clearInterval(timer); window.scrollTo(0, 0); resolve(); }
-                }, 80);
-            })
+            document.querySelectorAll('*').forEach(el => {
+                try {
+                    const s = window.getComputedStyle(el);
+                    if (s.position === 'fixed' || s.position === 'sticky') el.remove();
+                } catch(e) {}
+            });
         """)
-        page.wait_for_timeout(1500)
 
-        # DOM cleanup
-        page.evaluate(CLEANUP_JS)
-
+        # Tag source URL
         url_escaped = article["url"].replace("'", "\\'")
         page.evaluate(f"document.body.setAttribute('data-source-url', '{url_escaped}');")
-        page.add_style_tag(content=BBC_PRINT_CSS)
-        page.wait_for_timeout(600)
+
+        # Inject minimal CSS (BBC's own print CSS handles the rest)
+        page.add_style_tag(content=MINIMAL_CSS)
+        page.wait_for_timeout(400)
 
         page.pdf(
             path=str(output_path),
