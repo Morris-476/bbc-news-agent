@@ -71,7 +71,7 @@ def generate_pdf(article: dict, output_dir: Path, date_str: str) -> Path:
             args=["--no-sandbox", "--disable-setuid-sandbox"],
         )
         context = browser.new_context(
-            viewport={"width": 1440, "height": 900},
+            viewport={"width": 1280, "height": 900},
             locale="en-US",
         )
         page = context.new_page()
