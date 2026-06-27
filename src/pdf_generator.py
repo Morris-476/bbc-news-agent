@@ -15,24 +15,18 @@ header, footer, nav,
 [data-testid="advertisement"],
 [data-testid="tout"],
 [data-component="ad-slot"],
-[class*="Ad-"],
-[class*="ad-"],
-[id*="ad-"],
-[class*="promo"],
-[class*="Promo"],
+[data-component="advertisement-block"],
+[data-component="media-block"],
+[class*="Ad-"], [class*="ad-"], [id*="ad-"],
+[class*="promo"], [class*="Promo"],
 [data-testid="cookies-banner"],
 [data-testid="user-notification"],
+[data-testid="notification-banner"],
 [class*="social-embed"],
 [data-testid="topic-list"],
-[data-testid="notification-banner"],
-[class*="Banner"],
-[class*="banner"],
-[class*="Cookie"],
-[class*="cookie"],
-[id*="cookie"],
-[id*="Cookie"],
-.bbccom_slot,
-.bbccom_display_none,
+[class*="Backdrop"], [data-testid="backdrop"],
+[class*="Drawer"], [data-testid="drawer-background"],
+.bbccom_slot, .bbccom_display_none,
 script, style, noscript,
 [data-testid="timestamp"],
 [data-testid="byline-new-contributors"],
@@ -43,48 +37,11 @@ aside {
 body {
     font-family: "BBC Reith Serif", Georgia, "Times New Roman", serif !important;
     font-size: 18px !important;
-    line-height: 1.6 !important;
+    line-height: 1.7 !important;
     color: #222 !important;
     background: #fff !important;
     margin: 0 !important;
     padding: 0 !important;
-}
-
-[data-component="text-block"],
-[data-testid="article-figure"],
-article,
-main {
-    max-width: 100% !important;
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 0 12px !important;
-    box-sizing: border-box !important;
-}
-
-h1 {
-    font-family: "BBC Reith Serif", Georgia, serif !important;
-    font-size: 28px !important;
-    font-weight: 700 !important;
-    line-height: 1.2 !important;
-    color: #111 !important;
-    margin: 20px 0 8px !important;
-}
-
-[data-testid="hero-headline-and-description"] p,
-[data-component="description"] {
-    font-size: 19px !important;
-    font-weight: 400 !important;
-    color: #444 !important;
-    margin: 0 0 14px !important;
-}
-
-[data-testid="byline-new-contributors"],
-time {
-    font-family: "BBC Reith Sans", Arial, sans-serif !important;
-    font-size: 13px !important;
-    color: #555 !important;
-    display: block !important;
-    margin: 4px 0 18px !important;
 }
 
 body::before {
@@ -93,15 +50,23 @@ body::before {
     font-family: Arial, sans-serif;
     font-size: 11px;
     color: #666;
-    padding: 6px 12px;
+    padding: 6px 0;
     border-bottom: 1px solid #ddd;
-    margin-bottom: 12px;
+    margin-bottom: 16px;
+}
+
+h1 {
+    font-size: 32px !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+    color: #111 !important;
+    margin: 16px 0 10px !important;
 }
 
 p {
     font-size: 18px !important;
-    line-height: 1.7 !important;
-    margin: 0 0 18px !important;
+    line-height: 1.75 !important;
+    margin: 0 0 20px !important;
     color: #222 !important;
 }
 
@@ -109,35 +74,60 @@ img {
     max-width: 100% !important;
     height: auto !important;
     display: block !important;
-    margin: 14px auto !important;
+    margin: 16px 0 !important;
 }
 
-figcaption,
-[data-testid="image-caption"] {
+figcaption, [data-testid="image-caption"] {
     font-size: 13px !important;
     color: #555 !important;
-    text-align: center !important;
-    margin: 4px 0 18px !important;
+    margin: 4px 0 20px !important;
     font-style: italic !important;
 }
 
 blockquote {
     border-left: 4px solid #bb1919 !important;
-    margin: 18px 0 !important;
+    margin: 20px 0 !important;
     padding: 8px 16px !important;
     font-style: italic !important;
     color: #333 !important;
 }
 
-hr {
-    border: none !important;
-    border-top: 1px solid #ddd !important;
-    margin: 20px 0 !important;
-}
+hr { border: none !important; border-top: 1px solid #ddd !important; margin: 24px 0 !important; }
 
-@page {
-    margin: 1.5cm 2cm;
-    size: A4;
+@page { margin: 1.5cm 2cm; size: A4; }
+"""
+
+CLEANUP_JS = """
+() => {
+    // Remove fixed/sticky elements (banners, headers, cookie notices)
+    document.querySelectorAll('*').forEach(el => {
+        try {
+            const s = window.getComputedStyle(el);
+            if (s.position === 'fixed' || s.position === 'sticky') el.remove();
+        } catch(e) {}
+    });
+
+    // Remove video/media blocks only (keep image-block)
+    document.querySelectorAll('[data-component="media-block"]').forEach(el => el.remove());
+
+    // Fix BBC grid: make content column full width, remove sidebar
+    const gridItems = [...document.querySelectorAll('[class*="GridItem"]')];
+    gridItems.forEach((el, i) => {
+        if (i === 0) {
+            el.style.cssText += 'width:100%!important;max-width:none!important;';
+        } else {
+            el.remove();
+        }
+    });
+    document.querySelectorAll('[class*="GridStyled"],[class*="Grid-styles"]').forEach(el => {
+        el.style.cssText += 'display:block!important;width:100%!important;max-width:none!important;';
+    });
+
+    // Remove remaining width constraints on wrappers
+    document.querySelectorAll('[class*="LayoutBlock"],[class*="Container"],[class*="Wrapper"],[class*="PageInner"]').forEach(el => {
+        el.style.maxWidth = 'none';
+        el.style.width = '100%';
+    });
 }
 """
 
@@ -168,42 +158,46 @@ def generate_pdf(article: dict, output_dir: Path, date_str: str) -> Path:
         )
         page = context.new_page()
 
-        # Block only trackers/ads; allow all images (BBC images have no extension in URL)
         def route_handler(route):
             url = route.request.url
-            if any(x in url for x in ["doubleclick.net", "googlesyndication", "chartbeat", "scorecardresearch", "/ads/", "/analytics/"]):
+            if any(x in url for x in [
+                "doubleclick.net", "googlesyndication", "chartbeat",
+                "scorecardresearch", "omtrdc.net", "adobedtm.com",
+            ]):
                 route.abort()
             else:
                 route.continue_()
 
         page.route("**/*", route_handler)
-
         page.goto(article["url"], wait_until="networkidle", timeout=45000)
 
-        # Remove fixed/sticky elements (cookie banners, notification bars)
+        # Scroll to trigger lazy-loaded images
         page.evaluate("""
-            document.querySelectorAll('*').forEach(el => {
-                const s = window.getComputedStyle(el);
-                if (s.position === 'fixed' || s.position === 'sticky') {
-                    el.remove();
-                }
-            });
+            new Promise(resolve => {
+                let pos = 0;
+                const h = document.body.scrollHeight;
+                const timer = setInterval(() => {
+                    pos += 600;
+                    window.scrollTo(0, pos);
+                    if (pos >= h) { clearInterval(timer); window.scrollTo(0, 0); resolve(); }
+                }, 80);
+            })
         """)
+        page.wait_for_timeout(1500)
 
-        page.evaluate(f"document.body.setAttribute('data-source-url', '{article['url']}');")
+        # DOM cleanup
+        page.evaluate(CLEANUP_JS)
+
+        url_escaped = article["url"].replace("'", "\\'")
+        page.evaluate(f"document.body.setAttribute('data-source-url', '{url_escaped}');")
         page.add_style_tag(content=BBC_PRINT_CSS)
-        page.wait_for_timeout(800)
+        page.wait_for_timeout(600)
 
         page.pdf(
             path=str(output_path),
             format="A4",
             print_background=True,
-            margin={
-                "top": "1.5cm",
-                "bottom": "1.5cm",
-                "left": "2cm",
-                "right": "2cm",
-            },
+            margin={"top": "1.5cm", "bottom": "1.5cm", "left": "2cm", "right": "2cm"},
         )
 
         browser.close()
