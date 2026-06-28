@@ -116,6 +116,13 @@ def generate_pdf(article: dict, output_dir: Path, date_str: str) -> Path:
             });
         """)
 
+        # Remove RELATED section and BBC footer (non-article content)
+        page.evaluate("""
+            document.querySelectorAll(
+                '[data-testid^="ohio-section-outer"], footer'
+            ).forEach(el => el.remove());
+        """)
+
         url_escaped = article["url"].replace("'", "\\'")
         page.evaluate(f"document.body.setAttribute('data-source-url', '{url_escaped}');")
         page.add_style_tag(content=MINIMAL_CSS)
