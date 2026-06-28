@@ -96,10 +96,11 @@ def generate_pdf(article: dict, output_dir: Path, date_str: str) -> Path:
             });
         """)
 
-        # Force full-width on text content blocks (BBC print CSS constrains these to ~40%)
+        # Force full-width on text/headline blocks (BBC print CSS constrains these to ~40%)
         page.evaluate("""
             document.querySelectorAll(
-                '[data-component="layout-block"], [data-component="text-block"]'
+                '[data-component="layout-block"], [data-component="text-block"], ' +
+                '[data-component="headline-block"]'
             ).forEach(el => {
                 el.style.setProperty('max-width', 'none', 'important');
                 el.style.setProperty('width', '100%', 'important');
@@ -108,7 +109,9 @@ def generate_pdf(article: dict, output_dir: Path, date_str: str) -> Path:
                 '[data-component="layout-block"] [class*="Grid"],' +
                 '[data-component="layout-block"] [class*="GridItem"],' +
                 '[data-component="text-block"] [class*="Grid"],' +
-                '[data-component="text-block"] [class*="GridItem"]'
+                '[data-component="text-block"] [class*="GridItem"],' +
+                '[data-component="headline-block"] [class*="Grid"],' +
+                '[data-component="headline-block"] [class*="GridItem"]'
             ).forEach(el => {
                 el.style.setProperty('max-width', 'none', 'important');
                 el.style.setProperty('width', '100%', 'important');
@@ -116,10 +119,11 @@ def generate_pdf(article: dict, output_dir: Path, date_str: str) -> Path:
             });
         """)
 
-        # Remove non-article content: top ad slot, RELATED, MORE FROM BBC, footer
+        # Remove non-article content: top ad, byline bar, RELATED, MORE FROM BBC, footer
         page.evaluate("""
             document.querySelectorAll(
-                '[data-component="ad-slot"], [data-testid^="ohio-section-outer"], ' +
+                '[data-component="ad-slot"], [data-component="byline-block"], ' +
+                '[data-testid^="ohio-section-outer"], ' +
                 '[data-testid^="alaska-section-outer"], footer'
             ).forEach(el => el.remove());
         """)
