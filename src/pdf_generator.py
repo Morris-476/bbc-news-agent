@@ -116,10 +116,11 @@ def generate_pdf(article: dict, output_dir: Path, date_str: str) -> Path:
             });
         """)
 
-        # Remove RELATED section and BBC footer (non-article content)
+        # Remove non-article content: top ad slot, RELATED, MORE FROM BBC, footer
         page.evaluate("""
             document.querySelectorAll(
-                '[data-testid^="ohio-section-outer"], footer'
+                '[data-component="ad-slot"], [data-testid^="ohio-section-outer"], ' +
+                '[data-testid^="alaska-section-outer"], footer'
             ).forEach(el => el.remove());
         """)
 
