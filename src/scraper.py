@@ -54,13 +54,17 @@ def _get_most_read() -> list[dict]:
 
     if not articles:
         logger.warning("Most Read 區塊未找到，改抓首頁新聞連結...")
+        seen_urls = set()
         for a_tag in soup.find_all("a", href=True):
             href = a_tag["href"]
-            title = a_tag.get_text(strip=True)
-            if "/news/articles/" in href and len(title) > 20:
-                url = href if href.startswith("http") else f"https://www.bbc.com{href}"
-                if {"title": title, "url": url} not in articles:
-                    articles.append({"title": title, "url": url})
+            if "/news/articles/" not in href:
+                continue
+            headline_el = a_tag.find(["h3", "h2", "h1"])
+            title = headline_el.get_text(strip=True) if headline_el else a_tag.get_text(strip=True).split("  ")[0].strip()
+            url = href if href.startswith("http") else f"https://www.bbc.com{href}"
+            if len(title) > 10 and url not in seen_urls:
+                seen_urls.add(url)
+                articles.append({"title": title, "url": url})
 
     logger.info(f"找到 {len(articles)} 篇候選文章")
     return articles
