@@ -1,11 +1,4 @@
 {
-  "2026-06-27": [
-    "https://www.bbc.com/news/articles/cn4rd71411ko",
-    "https://www.bbc.com/news/articles/cdjk8zwe7z3o",
-    "https://www.bbc.com/news/articles/cn075j04pnyo",
-    "https://www.bbc.com/news/articles/c70y1y909pdo",
-    "https://www.bbc.com/news/articles/cze962pgk27o"
-  ],
   "2026-06-28": [
     "https://www.bbc.com/news/articles/cp8l451420zo",
     "https://www.bbc.com/news/articles/cdjk8zwe7z3o",
@@ -41,5 +34,8 @@
   "2026-07-04": [
     "https://www.bbc.com/news/articles/c982ry2pen3o",
     "https://www.bbc.com/news/articles/cp36l4e6v9po"
+  ],
+  "2026-07-05": [
+    "https://www.bbc.com/news/articles/cp9lppvkmz5o"
   ]
 }
