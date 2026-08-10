@@ -1,8 +1,4 @@
 {
-  "2026-08-02": [
-    "https://www.bbc.com/news/articles/cjwx74qgld2o",
-    "https://www.bbc.com/news/articles/c86n4ljxp63o"
-  ],
   "2026-08-03": [
     "https://www.bbc.com/news/articles/c5yvqk69enko",
     "https://www.bbc.com/news/articles/c3w05gx32d4o"
@@ -30,5 +26,8 @@
   "2026-08-09": [
     "https://www.bbc.com/news/articles/c20d8qre98do",
     "https://www.bbc.com/news/articles/c934j5y2lq9o"
+  ],
+  "2026-08-10": [
+    "https://www.bbc.com/news/articles/cx2rgzyplg2o"
   ]
 }
